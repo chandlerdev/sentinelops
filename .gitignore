@@ -1,0 +1,37 @@
+# Local-only folders and files (kept on this PC, never pushed)
+_unused/
+*.zip
+sentinelops_backend/src/main/resources/application.properties
+sentinelops_backend/application.properties
+application.properties.bak
+.env.local
+.env.production
+
+# Dependencies and build output
+node_modules/
+.next/
+target/
+build/
+dist/
+*.tsbuildinfo
+
+# Editors / OS
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+*.log
+
+# scanner raw output
+sentinelops_backend/scan-work/
+
+# secrets / local env
+.env
+.env.*
+*.pem
+*.key
+sentinelops_admin/.env*
+.claude/

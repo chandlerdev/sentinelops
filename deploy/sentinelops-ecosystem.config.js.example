@@ -1,0 +1,25 @@
+// PM2 definition for SentinelOps ONLY. Copy to sentinelops-ecosystem.config.js on the server (same folder).
+// Ports: backend 8096, admin 3017 (checked free on the server). The backend reads application.properties from its working folder.
+const SITE = "/var/www/Vhost/jjlltdnext.desss-portfolio.com";
+
+module.exports = {
+  apps: [
+    {
+      name: "sentinelops-backend",
+      cwd: SITE + "/sentinelops_backend",
+      script: "java",
+      args: "-Xmx512m -jar backend.jar",
+      autorestart: true,
+      max_restarts: 10,
+    },
+    {
+      name: "sentinelops-admin",
+      cwd: SITE + "/sentinelops_admin",
+      script: "npm",
+      args: "start",
+      env: { NODE_ENV: "production" },
+      autorestart: true,
+      max_restarts: 10,
+    },
+  ],
+};

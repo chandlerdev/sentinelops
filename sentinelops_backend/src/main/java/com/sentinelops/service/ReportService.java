@@ -1,0 +1,281 @@
+package com.sentinelops.service;
+
+import com.lowagie.text.Chunk;
+import com.lowagie.text.Document;
+import com.lowagie.text.Font;
+import com.lowagie.text.PageSize;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
+import com.lowagie.text.pdf.PdfWriter;
+import com.sentinelops.entity.*;
+import com.sentinelops.repository.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.awt.Color;
+import java.io.ByteArrayOutputStream;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * PDF report for one engagement. Built only from stored facts: targets and their verification, the signed
+ * authorization, scan runs, findings and retest results. Unconfirmed (candidate) findings are left out unless
+ * a staff member asks for them, and then they are labelled as unconfirmed.
+ */
+@Service
+public class ReportService {
+
+    private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC);
+    private static final Font H1 = new Font(Font.HELVETICA, 22, Font.BOLD, new Color(0x1f, 0x29, 0x37));
+    private static final Font H2 = new Font(Font.HELVETICA, 14, Font.BOLD, new Color(0x1f, 0x29, 0x37));
+    private static final Font H3 = new Font(Font.HELVETICA, 11, Font.BOLD);
+    private static final Font BODY = new Font(Font.HELVETICA, 9.5f);
+    private static final Font SMALL = new Font(Font.HELVETICA, 8, Font.NORMAL, Color.GRAY);
+
+    public record Report(byte[] pdf, String sha256, String fileName) {}
+
+    private final AccessService access;
+    private final EngagementRepository engagements;
+    private final ClientRepository clients;
+    private final TargetRepository targets;
+    private final AuthorizationRepository authorizations;
+    private final ScanRunRepository scanRuns;
+    private final FindingRepository findings;
+    private final RetestRepository retests;
+    private final AuditService audit;
+
+    public ReportService(AccessService access, EngagementRepository engagements, ClientRepository clients,
+                         TargetRepository targets, AuthorizationRepository authorizations, ScanRunRepository scanRuns,
+                         FindingRepository findings, RetestRepository retests, AuditService audit) {
+        this.access = access;
+        this.engagements = engagements;
+        this.clients = clients;
+        this.targets = targets;
+        this.authorizations = authorizations;
+        this.scanRuns = scanRuns;
+        this.findings = findings;
+        this.retests = retests;
+        this.audit = audit;
+    }
+
+    @Transactional(readOnly = true)
+    public Report generate(String engagementId, boolean includeCandidates, String actor) {
+        Engagement e = access.requireEngagement(engagementId);
+        User u = access.currentUser();
+        boolean client = u.getRole() == Role.CLIENT;
+        boolean withCandidates = includeCandidates && !client;
+
+        String clientName = clients.findById(e.getClientId()).map(Client::getName).orElse("-");
+        List<Target> ts = targets.findByEngagementIdOrderByCreatedAtAsc(engagementId);
+        List<Authorization> auths = authorizations.findByEngagementIdOrderByCreatedAtDesc(engagementId);
+        List<ScanRun> runs = scanRuns.findByEngagementIdOrderByCreatedAtDesc(engagementId);
+        Map<String, String> targetName = ts.stream().collect(Collectors.toMap(Target::getId, Target::getValue, (a, b) -> a));
+
+        List<Finding> fs = findings.findByEngagementId(engagementId).stream()
+                .filter(f -> f.getStatus() != FindingStatus.FALSE_POSITIVE)
+                .filter(f -> f.isValidated() || withCandidates)
+                .sorted(Comparator.comparingInt((Finding f) -> FindingService.SEVERITY_ORDER.indexOf(f.getSeverity()))
+                        .thenComparing(Finding::getTitle))
+                .toList();
+
+        String reportId = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Document doc = new Document(PageSize.A4, 48, 48, 54, 54);
+        PdfWriter.getInstance(doc, out);
+        doc.addTitle("Security assessment report - " + clean(e.getName()));
+        doc.addCreator("SentinelOps");
+        doc.open();
+
+        // ---- cover ----
+        doc.add(spacer(80));
+        doc.add(new Paragraph("Security Assessment Report", H1));
+        doc.add(new Paragraph(clean(e.getName()), H2));
+        doc.add(spacer(14));
+        doc.add(kv("Client", clientName));
+        doc.add(kv("Environment", e.getEnvironment() == null ? "-" : e.getEnvironment()));
+        doc.add(kv("Report generated", TS.format(now)));
+        doc.add(kv("Generated by", actor));
+        doc.add(kv("Report ID", reportId));
+        doc.add(kv("Contents", withCandidates ? "Includes UNCONFIRMED scanner findings (internal draft)"
+                                              : "Confirmed findings only"));
+        doc.add(spacer(18));
+        doc.add(new Paragraph("CONFIDENTIAL - for the named client and the assessment team only.", SMALL));
+
+        // ---- executive summary ----
+        doc.newPage();
+        doc.add(new Paragraph("1. Executive summary", H2));
+        long open = fs.stream().filter(f -> EnumSet.of(FindingStatus.OPEN, FindingStatus.IN_PROGRESS,
+                FindingStatus.RETEST_FAIL).contains(f.getStatus())).count();
+        long fixedWaiting = fs.stream().filter(f -> f.getStatus() == FindingStatus.FIXED).count();
+        long resolved = fs.stream().filter(f -> f.getStatus() == FindingStatus.RETEST_PASS || f.getStatus() == FindingStatus.CLOSED).count();
+        doc.add(new Paragraph(fs.size() + " finding(s) are reported: " + open + " open, " + fixedWaiting
+                + " reported fixed and awaiting retest, " + resolved + " verified as resolved.", BODY));
+        doc.add(spacer(6));
+        PdfPTable sev = table(3, new float[]{2f, 1f, 1f});
+        header(sev, "Severity", "Total", "Still open");
+        for (Severity s : FindingService.SEVERITY_ORDER) {
+            long total = fs.stream().filter(f -> f.getSeverity() == s).count();
+            long op = fs.stream().filter(f -> f.getSeverity() == s && EnumSet.of(FindingStatus.OPEN,
+                    FindingStatus.IN_PROGRESS, FindingStatus.RETEST_FAIL).contains(f.getStatus())).count();
+            row(sev, label(s), String.valueOf(total), String.valueOf(op));
+        }
+        doc.add(sev);
+
+        // ---- scope ----
+        doc.add(spacer(10));
+        doc.add(new Paragraph("2. Scope and authorization", H2));
+        PdfPTable tt = table(4, new float[]{3f, 1f, 1.4f, 2.4f});
+        header(tt, "Target", "Type", "Ownership", "Verified until");
+        Instant n = Instant.now();
+        for (Target t : ts) {
+            String own = t.isLab() ? "Lab asset" : t.isVerifiedAt(n) ? "Verified" : "Not verified";
+            row(tt, t.getValue(), t.getKind().name(), own,
+                    t.getVerificationExpiresAt() == null ? "-" : TS.format(t.getVerificationExpiresAt()));
+        }
+        doc.add(tt);
+        doc.add(spacer(6));
+        for (Authorization a : auths) {
+            doc.add(new Paragraph(clean(a.getTitle()) + "  [" + a.getStatus() + "]", H3));
+            doc.add(new Paragraph("Approved by: " + dash(a.getSignedBy()) + (a.getSignedAt() == null ? "" : " on " + TS.format(a.getSignedAt()))
+                    + "\nTesting window: " + (a.getWindowStart() == null ? "-" : TS.format(a.getWindowStart())) + " to "
+                    + (a.getWindowEnd() == null ? "-" : TS.format(a.getWindowEnd()))
+                    + "\nPermitted methods: " + a.getPermittedMethodSet()
+                    + "\nActive testing permitted: " + (a.isAllowActive() ? "yes" : "no")
+                    + "   Authenticated testing permitted: " + (a.isAllowAuthenticated() ? "yes" : "no")
+                    + "\nExcluded assets: " + (a.getExcludedAssetList().isEmpty() ? "none" : String.join(", ", a.getExcludedAssetList())), BODY));
+            doc.add(spacer(4));
+        }
+
+        // ---- method ----
+        doc.add(new Paragraph("3. Method and limitations", H2));
+        Set<String> tools = runs.stream().filter(r -> r.getStatus() == ScanStatus.COMPLETED).map(ScanRun::getTool)
+                .collect(Collectors.toCollection(TreeSet::new));
+        doc.add(new Paragraph("Automated tools used in completed scans: " + (tools.isEmpty() ? "none" : String.join(", ", tools))
+                + ". Scans were limited to the authorized targets and window above and were passive unless stated as active "
+                + "in the scan appendix.\n"
+                + "Automated scanning does not find every weakness and can report issues that are not real. Findings marked as "
+                + "confirmed were reviewed by a tester. This report is a point-in-time view and is not a guarantee that the "
+                + "systems are secure.", BODY));
+
+        // ---- findings ----
+        doc.newPage();
+        doc.add(new Paragraph("4. Findings", H2));
+        if (fs.isEmpty()) {
+            doc.add(new Paragraph("No findings are reported for this engagement.", BODY));
+        }
+        int i = 1;
+        for (Finding f : fs) {
+            doc.add(spacer(8));
+            Paragraph title = new Paragraph(i++ + ". " + clean(f.getTitle()), H3);
+            title.setKeepTogether(true);
+            doc.add(title);
+            doc.add(new Paragraph("Severity: " + f.getSeverity() + "    Status: " + f.getStatus()
+                    + "    Found by: " + dash(f.getTool()) + (f.isValidated() ? "    Confirmed" : "    UNCONFIRMED")
+                    + "\nTarget: " + targetName.getOrDefault(f.getTargetId(), "-")
+                    + "\nFirst seen: " + TS.format(f.getCreatedAt())
+                    + (f.getLastSeenAt() == null ? "" : "    Last seen: " + TS.format(f.getLastSeenAt())), SMALL));
+            if (f.getLocation() != null) doc.add(new Paragraph("Where: " + clean(f.getLocation()), BODY));
+            if (f.getDescription() != null) doc.add(new Paragraph("What: " + clean(f.getDescription()), BODY));
+            doc.add(new Paragraph("How to fix: " + (f.getRemediation() == null ? "See references." : clean(f.getRemediation())), BODY));
+            if (f.getReferenceIds() != null) doc.add(new Paragraph("References: " + clean(f.getReferenceIds()), SMALL));
+            for (Retest r : retests.findByFindingIdOrderByTestedAtDesc(f.getId())) {
+                doc.add(new Paragraph("Retest " + TS.format(r.getTestedAt()) + ": " + r.getResult()
+                        + (r.getNotes() == null ? "" : " - " + clean(r.getNotes())), SMALL));
+            }
+        }
+
+        // ---- appendix ----
+        doc.newPage();
+        doc.add(new Paragraph("Appendix A. Scan runs", H2));
+        PdfPTable rt = table(5, new float[]{1.2f, 2.4f, 1f, 1.1f, 2.3f});
+        header(rt, "Tool", "Target", "Mode", "Status", "Ended");
+        for (ScanRun r : runs) {
+            row(rt, r.getTool() + (r.getPurpose() != null && !"SCAN".equals(r.getPurpose()) ? " (" + r.getPurpose().toLowerCase() + ")" : ""),
+                    r.getTargetHost(), r.getMode().name(), r.getStatus().name(),
+                    r.getEndedAt() == null ? "-" : TS.format(r.getEndedAt()));
+        }
+        doc.add(rt);
+        doc.add(spacer(10));
+        doc.add(new Paragraph("Report ID " + reportId + ". Generated " + TS.format(now) + ".", SMALL));
+        doc.close();
+
+        byte[] pdf = out.toByteArray();
+        String sha = hex(pdf);
+        audit.record(actor, "report.generated", "Engagement", engagementId,
+                "reportId=" + reportId + " sha256=" + sha + " findings=" + fs.size() + " candidates=" + withCandidates);
+        return new Report(pdf, sha, "sentinelops-report-" + engagementId.substring(0, 8) + ".pdf");
+    }
+
+    // ---- helpers ----
+
+    private static Paragraph spacer(float h) {
+        Paragraph p = new Paragraph(" ");
+        p.setLeading(h);
+        return p;
+    }
+
+    private static Paragraph kv(String k, String v) {
+        Paragraph p = new Paragraph();
+        p.add(new Chunk(k + ": ", H3));
+        p.add(new Chunk(clean(v), BODY));
+        return p;
+    }
+
+    private static PdfPTable table(int cols, float[] widths) {
+        PdfPTable t = new PdfPTable(cols);
+        t.setWidthPercentage(100);
+        t.setWidths(widths);
+        return t;
+    }
+
+    private static void header(PdfPTable t, String... cols) {
+        for (String c : cols) {
+            PdfPCell cell = new PdfPCell(new Phrase(c, new Font(Font.HELVETICA, 9, Font.BOLD, Color.WHITE)));
+            cell.setBackgroundColor(new Color(0x37, 0x41, 0x51));
+            cell.setPadding(4);
+            t.addCell(cell);
+        }
+    }
+
+    private static void row(PdfPTable t, String... cols) {
+        for (String c : cols) {
+            PdfPCell cell = new PdfPCell(new Phrase(clean(c), BODY));
+            cell.setPadding(4);
+            t.addCell(cell);
+        }
+    }
+
+    private static String label(Severity s) {
+        return s.name().charAt(0) + s.name().substring(1).toLowerCase();
+    }
+
+    private static String dash(String s) { return s == null || s.isBlank() ? "-" : clean(s); }
+
+    /** The built-in PDF fonts cover Latin-1 only; replace anything else so a scanner string can never break the file. */
+    static String clean(String s) {
+        if (s == null) return "";
+        StringBuilder b = new StringBuilder(s.length());
+        for (char c : s.toCharArray()) {
+            if (c == '\n' || c == '\t' || (c >= 32 && c <= 126) || (c >= 160 && c <= 255)) b.append(c);
+            else if (c == '\r') continue;
+            else b.append('?');
+        }
+        return b.toString();
+    }
+
+    private static String hex(byte[] data) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data));
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+}

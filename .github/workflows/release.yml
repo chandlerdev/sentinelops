@@ -1,0 +1,55 @@
+name: Release build
+
+# A tag like v1.0.0 builds the backend jar and the frontend bundle and attaches both to a GitHub release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Backend - test and package
+        working-directory: sentinelops_backend
+        run: mvn -B package
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: sentinelops_admin/package-lock.json
+
+      - name: Frontend - install, type-check, build
+        working-directory: sentinelops_admin
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Collect release files
+        run: |
+          mkdir -p dist
+          cp sentinelops_backend/target/sentinelops-backend-*.jar dist/backend.jar
+          tar -czf dist/frontend.tar.gz -C sentinelops_admin .next package.json package-lock.json next.config.js
+          cp deploy/sentinelops-deploy.sh deploy/sentinelops-ecosystem.config.js.example dist/
+          ls -l dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/backend.jar
+            dist/frontend.tar.gz
+          generate_release_notes: true

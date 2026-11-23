@@ -1,0 +1,35 @@
+# SentinelOps lab: our OWN copy of OWASP Juice Shop (a deliberately vulnerable app) for testing the platform.
+#
+# - No ports are published: nothing on the shared server can reach it from outside.
+# - The network is "internal": containers on it cannot reach the internet or the company network.
+#   Scanner containers for lab targets are attached to THIS network only (see sentinelops.scan.engine.lab-network).
+# - Before starting, check the subnet is free:   docker network ls   and   docker network inspect <name> | grep Subnet
+#   If 172.28.0.0/24 is taken, change it here AND in sentinelops.scan.lab.cidrs.
+#
+# Start:  docker compose -f lab/docker-compose.yml up -d
+# Stop:   docker compose -f lab/docker-compose.yml down
+name: sentinelops-lab
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest   # pin to a version tag once the lab works
+    container_name: sentinelops-juice-shop
+    restart: unless-stopped
+    networks:
+      lab:
+        ipv4_address: 172.28.0.10
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+    cpus: 1
+    # Optional, to look at it yourself from the server only (check the port is free first):
+    # ports: ["127.0.0.1:3100:3000"]
+
+networks:
+  lab:
+    name: sentinelops-lab
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

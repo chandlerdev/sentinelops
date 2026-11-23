@@ -1,0 +1,92 @@
+# =====================================================================================================
+# Backend settings. Every site has its OWN copy of this file:
+#     cp application.properties.example application.properties      (in backend/src/main/resources)
+# then fill in the SITE SETTINGS block. application.properties is git-ignored: it holds passwords and keys,
+# "git pull" never touches it, and it must never be committed. Rebuild (mvn clean package) after changing it.
+# =====================================================================================================
+spring.application.name=sentinelops
+
+# ---------- SITE SETTINGS (change these on every site) ----------
+server.port=8096
+spring.datasource.url=jdbc:mysql://localhost:3306/sentinelops?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+spring.datasource.username=root
+spring.datasource.password=
+# Long random value (>= 32 bytes). The app refuses to start without it.
+sentinelops.security.jwt-secret=CHANGE_ME_TO_A_LONG_RANDOM_SECRET_AT_LEAST_32_BYTES
+# The site's public address (browser origin) - CORS
+sentinelops.security.cors-allowed-origins=http://localhost:3200,https://jjlltdnext.desss-portfolio.com
+# true  = the person who approves an authorization must differ from the person who requested it (keep true live)
+sentinelops.security.four-eyes=true
+# Longest testing window one authorization may grant
+sentinelops.security.max-window-days=90
+# Demo admin + sample engagement on an EMPTY database: start with  --spring.profiles.active=seed
+# and set the environment variable SEED_ADMIN_PASSWORD (>= 10 chars).
+
+# ---------- Scan safety ----------
+# Addresses that must NEVER be scanned, comma separated (IPs or CIDRs). Put THIS SERVER'S PUBLIC IP here
+# so no domain pointing at the shared company server (our own live apps) can ever be scanned.
+sentinelops.scan.blocked-addresses=
+# Smallest network ranges that may be registered (a /24 = 256 addresses)
+sentinelops.scan.min-ipv4-prefix=24
+sentinelops.scan.min-ipv6-prefix=120
+sentinelops.scan.identifier-header=X-Pentest
+
+# Controlled laboratory exception (our own Juice Shop on a dedicated Docker network).
+# Private addresses are reachable ONLY for ADMIN-registered "lab" targets, ONLY for these hosts, ONLY inside these CIDRs.
+sentinelops.scan.lab.enabled=false
+sentinelops.scan.lab.cidrs=172.28.0.0/24
+sentinelops.scan.lab.hosts=juice-shop
+
+# ---------- Target ownership verification ----------
+# Independent DNS servers used for the TXT check (empty = the server's own resolver)
+sentinelops.verification.dns-servers=1.1.1.1,8.8.8.8
+sentinelops.verification.challenge-hours=72
+sentinelops.verification.valid-days=30
+sentinelops.verification.http-timeout-seconds=8
+
+# ---------- Fixed settings (same on every site) ----------
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.hikari.maximum-pool-size=10
+# Flyway owns the schema; Hibernate never alters it.
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.open-in-view=false
+spring.jpa.properties.hibernate.jdbc.time_zone=UTC
+
+sentinelops.security.jwt-ttl-minutes=30
+sentinelops.security.rate-limit-per-minute=100
+
+# Do not leak exception details to clients
+server.error.include-message=never
+server.error.include-stacktrace=never
+server.error.include-binding-errors=never
+server.forward-headers-strategy=framework
+
+# Actuator: only health is exposed
+management.endpoints.web.exposure.include=health
+management.endpoint.health.show-details=never
+
+# ---- Scan engine (Phase 2) ----
+# Off by default. Nothing is queued or executed until this is true. Needs Docker on the server.
+sentinelops.scan.engine.enabled=false
+sentinelops.scan.engine.docker-binary=docker
+sentinelops.scan.engine.work-dir=./scan-work
+# Docker network for scans of EXTERNAL targets (empty = default bridge). Restrict its egress with the host firewall (see DEPLOYMENT_GUIDE).
+sentinelops.scan.engine.scan-network=
+# Lab targets (our own Juice Shop) are scanned only on this network, created by lab/docker-compose.yml.
+sentinelops.scan.engine.lab-network=sentinelops-lab
+sentinelops.scan.engine.max-concurrent=1
+sentinelops.scan.engine.timeout-minutes=30
+sentinelops.scan.engine.cpus=1
+sentinelops.scan.engine.memory=1g
+# Pin images to exact versions (or digests) once you have confirmed they work.
+sentinelops.scan.engine.nuclei-image=projectdiscovery/nuclei:latest
+sentinelops.scan.engine.zap-image=ghcr.io/zaproxy/zaproxy:stable
+sentinelops.scan.engine.testssl-image=drwetter/testssl.sh:3.2
+sentinelops.scan.engine.nmap-image=instrumentisto/nmap:latest
+
+# ---- Authenticated scans (Phase 5) ----
+# Base64 of 32 random bytes, encrypts stored scan credentials: openssl rand -base64 32
+# Empty = storing credentials is refused. Keep this value secret and back it up; without it stored credentials cannot be read.
+sentinelops.security.secret-key=
