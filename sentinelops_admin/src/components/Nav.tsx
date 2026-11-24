@@ -4,31 +4,49 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getRole, getToken, Role, setSession } from "@/lib/api";
-import { colors } from "@/components/ui";
+
+function Shield() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6l8-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
 
 export default function Nav() {
   const router = useRouter();
   const path = usePathname();
   const [role, setRole] = useState<Role | null>(null);
   const [authed, setAuthed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     setAuthed(!!getToken());
     setRole(getRole());
   }, [path]);
 
+  useEffect(() => {
+    const t = document.documentElement.getAttribute("data-theme");
+    setTheme(t === "light" ? "light" : "dark");
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("so-theme", next); } catch { /* private mode: keep the choice for this tab only */ }
+  }
+
   const link = (href: string, label: string) => (
-    <Link key={href} href={href} style={{
-      color: path === href ? colors.text : colors.muted, textDecoration: "none", fontSize: 13, marginRight: 18,
-    }}>{label}</Link>
+    <Link key={href} href={href} className={`navlink${path === href ? " active" : ""}`}>{label}</Link>
   );
 
   return (
-    <nav style={{
-      display: "flex", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${colors.border}`,
-      background: colors.panel, flexWrap: "wrap", gap: 4,
-    }}>
-      <strong style={{ marginRight: 24, letterSpacing: "-0.01em" }}>SentinelOps</strong>
+    <nav className="topbar">
+      <Link href={authed ? "/" : "/login"} className="brand">
+        <span className="brand-mark"><Shield /></span>SentinelOps
+      </Link>
       {authed && link("/dashboard", "Dashboard")}
       {authed && link("/", "Engagements")}
       {authed && role !== "CLIENT" && link("/clients", "Clients")}
@@ -36,15 +54,17 @@ export default function Nav() {
       {authed && (role === "ADMIN" || role === "MANAGER") && link("/audit", "Audit log")}
       {authed && (role === "ADMIN" || role === "MANAGER") && link("/settings", "Settings")}
       {link("/status", "Status")}
-      <span style={{ marginLeft: "auto", fontSize: 12, color: colors.muted }}>
+      <div className="nav-right">
+        <button className="icon-btn" onClick={toggleTheme} aria-label="Switch between dark and light theme" title="Switch theme">
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
         {authed ? (
           <>
-            {role}{" "}
-            <a href="#" onClick={(e) => { e.preventDefault(); setSession(null); setAuthed(false); router.push("/login"); }}
-               style={{ color: colors.accent, marginLeft: 8 }}>Sign out</a>
+            <span className="role-chip">{role}</span>
+            <a href="#" onClick={(e) => { e.preventDefault(); setSession(null); setAuthed(false); router.push("/login"); }}>Sign out</a>
           </>
         ) : link("/login", "Sign in")}
-      </span>
+      </div>
     </nav>
   );
 }

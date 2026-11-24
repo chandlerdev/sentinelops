@@ -108,6 +108,9 @@ public class AppProperties {
         private String zapImage = "ghcr.io/zaproxy/zaproxy:stable";
         private String testsslImage = "drwetter/testssl.sh:3.2";
         private String nmapImage = "instrumentisto/nmap:latest";
+        /** "npm" binary on the SERVER (not Docker): runs "npm audit" against an uploaded package-lock.json. */
+        private String npmBinary = "npm";
+        private int npmAuditTimeoutSeconds = 60;
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean v) { this.enabled = v; }
@@ -137,6 +140,10 @@ public class AppProperties {
         public void setTestsslImage(String v) { this.testsslImage = v; }
         public String getNmapImage() { return nmapImage; }
         public void setNmapImage(String v) { this.nmapImage = v; }
+        public String getNpmBinary() { return npmBinary; }
+        public void setNpmBinary(String v) { this.npmBinary = v; }
+        public int getNpmAuditTimeoutSeconds() { return npmAuditTimeoutSeconds; }
+        public void setNpmAuditTimeoutSeconds(int v) { this.npmAuditTimeoutSeconds = Math.max(5, v); }
     }
 
     public static class Verification {

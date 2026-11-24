@@ -184,7 +184,9 @@ public class ScanExecutor {
     }
 
     /** Stores findings and settles retests. Only called for a run that COMPLETED with parsed output. */
-    private int ingest(ScanRun run, Target target, String tool, ScanMode mode, List<NormalizedFinding> parsed) {
+    /** Package-private: also used by {@link LogicTestService} so logic-module findings share the same
+     *  dedup/fingerprint/retest pipeline as scanner findings. */
+    int ingest(ScanRun run, Target target, String tool, ScanMode mode, List<NormalizedFinding> parsed) {
         int added = 0;
         Instant now = Instant.now();
         Set<String> seen = new HashSet<>();

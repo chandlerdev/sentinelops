@@ -1,6 +1,7 @@
 package com.sentinelops.controller;
 
 import com.sentinelops.dto.TargetDtos.*;
+import com.sentinelops.service.LogicTestService;
 import com.sentinelops.service.ScanService;
 import com.sentinelops.service.TargetService;
 import com.sentinelops.service.VerificationService;
@@ -19,11 +20,19 @@ public class TargetController {
     private final TargetService targets;
     private final VerificationService verification;
     private final ScanService scans;
+    private final LogicTestService logic;
 
-    public TargetController(TargetService targets, VerificationService verification, ScanService scans) {
+    public TargetController(TargetService targets, VerificationService verification, ScanService scans, LogicTestService logic) {
         this.targets = targets;
         this.verification = verification;
         this.scans = scans;
+        this.logic = logic;
+    }
+
+    /** Phase 5 (NET-09): SPF/DMARC hygiene for a domain target. See PENTEST_COVERAGE_PLAN.md. */
+    @PostMapping("/{targetId}/dns-hygiene-check")
+    public LogicTestService.RunResult dnsHygiene(@PathVariable String engagementId, @PathVariable String targetId) {
+        return logic.runDnsHygieneCheck(engagementId, targetId, CurrentUser.email());
     }
 
     @GetMapping

@@ -1,26 +1,29 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getRole, getToken, Role } from "@/lib/api";
 
-// Shared look (dark theme, inline styles). Kept in one place so pages stay small.
+// Colours are CSS variables (see app/globals.css) so the dark/light theme switch reaches inline styles too.
 export const colors = {
-  bg: "#0f1115", panel: "#171a21", border: "#2a2f3a", text: "#e6e9ef", muted: "#9aa3b2",
-  accent: "#5b8cff", ok: "#3fb950", warn: "#d29922", bad: "#f85149", orange: "#ff7b45",
+  bg: "var(--bg-soft)", panel: "var(--panel)", border: "var(--border)", text: "var(--text)", muted: "var(--muted)",
+  accent: "var(--accent)", ok: "var(--ok)", warn: "var(--warn)", bad: "var(--bad)", orange: "var(--orange)",
 };
 
-export const fieldStyle: React.CSSProperties = {
-  padding: "9px 11px", borderRadius: 8, background: colors.bg, border: `1px solid ${colors.border}`,
-  color: colors.text, fontSize: 14, width: "100%", boxSizing: "border-box",
-};
+// Inputs are styled globally; this stays so existing `{ ...fieldStyle, width: 140 }` overrides keep working.
+export const fieldStyle: React.CSSProperties = {};
 
-export function Card({ title, children, right }: { title?: string; children: React.ReactNode; right?: React.ReactNode }) {
+export function Card({ title, children, right, step }: {
+  title?: string; children: React.ReactNode; right?: React.ReactNode; step?: number;
+}) {
   return (
-    <section style={{ background: colors.panel, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 18, marginTop: 18 }}>
+    <section className="card">
       {(title || right) && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <h2 style={{ fontSize: 15, margin: 0 }}>{title}</h2>
+        <div className="card-head">
+          <h2 className="card-title">
+            {step !== undefined && <span className="step">{step}</span>}
+            {title}
+          </h2>
           {right}
         </div>
       )}
@@ -33,27 +36,29 @@ export function Btn({ children, onClick, kind = "primary", disabled, type = "but
   children: React.ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "danger";
   disabled?: boolean; type?: "button" | "submit"; small?: boolean;
 }) {
-  const bg = kind === "primary" ? colors.accent : kind === "danger" ? colors.bad : "transparent";
   return (
-    <button type={type} onClick={onClick} disabled={disabled} style={{
-      padding: small ? "5px 10px" : "9px 14px", borderRadius: 8, fontSize: small ? 12 : 13, fontWeight: 600,
-      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1, color: kind === "ghost" ? colors.text : "#fff",
-      background: bg, border: kind === "ghost" ? `1px solid ${colors.border}` : "none", marginRight: 6,
-    }}>{children}</button>
+    <button type={type} onClick={onClick} disabled={disabled} className={`btn ${kind}${small ? " small" : ""}`}>
+      {children}
+    </button>
   );
 }
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A labelled input. `error` shows "<name> is required"-style text right under the field. */
+export function Field({ label, children, error, required, hint }: {
+  label: string; children: React.ReactNode; error?: string | null; required?: boolean; hint?: string;
+}) {
   return (
-    <label style={{ display: "block", fontSize: 12, color: colors.muted }}>
-      {label}
-      <div style={{ marginTop: 4 }}>{children}</div>
+    <label className={`field${error ? " has-error" : ""}`}>
+      <span className="label-text">{label}{required && <span className="req" aria-hidden="true">*</span>}</span>
+      {children}
+      {hint && !error && <span className="hint">{hint}</span>}
+      {error && <div className="field-error" role="alert">{error}</div>}
     </label>
   );
 }
 
 export function Grid({ children, min = 220 }: { children: React.ReactNode; min?: number }) {
-  return <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 12 }}>{children}</div>;
+  return <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 14 }}>{children}</div>;
 }
 
 const badgeColor: Record<string, string> = {
@@ -63,23 +68,63 @@ const badgeColor: Record<string, string> = {
   OPEN: colors.warn, IN_PROGRESS: colors.accent, FIXED: colors.accent, RETEST_PASS: colors.ok, RETEST_FAIL: colors.bad,
   CLOSED: colors.ok, FALSE_POSITIVE: colors.muted, QUEUED: colors.muted, RUNNING: colors.accent, STOPPED: colors.muted,
   PENDING_APPROVAL: colors.warn, REJECTED: colors.bad, REVOKED: colors.bad, FAILED: colors.bad,
+  AWAITING_AUTHORIZATION: colors.warn,
 };
 export function Badge({ text }: { text: string }) {
   const c = badgeColor[text] || colors.muted;
   return (
-    <span style={{ padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 600, color: c, border: `1px solid ${c}` }}>
-      {text.replace("_", " ")}
+    <span className="badge" style={{ color: c, borderColor: `color-mix(in srgb, ${c} 55%, transparent)`, background: `color-mix(in srgb, ${c} 13%, transparent)` }}>
+      {text.replace(/_/g, " ")}
     </span>
   );
 }
 
+/** Inline message for ONE section of a page. Render it right under the button that caused it. */
 export function Msg({ err, ok }: { err?: string | null; ok?: string | null }) {
   if (!err && !ok) return null;
-  return <p style={{ color: err ? colors.bad : colors.ok, fontSize: 13, margin: "10px 0 0" }}>{err || ok}</p>;
+  return <div className={`msg ${err ? "err" : "ok"}`} role={err ? "alert" : "status"}>{err || ok}</div>;
+}
+
+export function Empty({ children }: { children: React.ReactNode }) {
+  return <div className="empty">{children}</div>;
 }
 
 export function fmt(d?: string | null) {
   return d ? new Date(d).toLocaleString() : "-";
+}
+
+// ---------------------------------------------------------------------------------------------
+// Form validation. Every rule names its field, so the message is "<Field name> is required".
+// ---------------------------------------------------------------------------------------------
+export type Rule = { label: string; value: unknown; email?: boolean; min?: number; required?: boolean };
+
+export function useValidation() {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /** Returns true when every rule passes; otherwise stores a message per failing field. */
+  const check = useCallback((rules: Record<string, Rule>) => {
+    const next: Record<string, string> = {};
+    for (const [key, r] of Object.entries(rules)) {
+      const v = r.value;
+      const empty = Array.isArray(v) ? v.length === 0 : typeof v === "string" ? v.trim() === "" : v === null || v === undefined;
+      if (empty) {
+        if (r.required !== false) next[key] = `${r.label} is required`;
+        continue;
+      }
+      if (typeof v === "string") {
+        if (r.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) next[key] = `${r.label} must be a valid email address`;
+        else if (r.min && v.length < r.min) next[key] = `${r.label} must be at least ${r.min} characters`;
+      }
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }, []);
+
+  const clear = useCallback((key: string) => {
+    setErrors((p) => { if (!p[key]) return p; const { [key]: _drop, ...rest } = p; return rest; });
+  }, []);
+  const reset = useCallback(() => setErrors({}), []);
+  return { errors, check, clear, reset };
 }
 
 /** Redirects to /login when there is no session. Returns the current role once known. */

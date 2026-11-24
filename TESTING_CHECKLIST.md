@@ -79,12 +79,15 @@ If the database still holds my old test data, it is easiest to reset it (drop an
 1. Install **Docker Desktop**, start it, and run `docker run --rm hello-world` once.
 2. In `sentinelops_backend/src/main/resources/application.properties` set:
    `sentinelops.scan.lab.enabled=true`, `sentinelops.scan.lab.cidrs=172.28.0.0/24`, `sentinelops.scan.lab.hosts=juice-shop`
-   (the engine is already enabled locally). On Windows the lab name must resolve: add `172.28.0.10 juice-shop` to
-   `C:\Windows\System32\drivers\etc\hosts` (edit as administrator), and note that Docker Desktop on Windows may not
-   expose the container network to the PC - if the gate cannot resolve it, tell me and I will adapt it.
+   (the engine is already enabled locally), then restart the backend. The lab is addressed by its fixed IP, so no hosts-file
+   edit is needed. Note that Docker Desktop on Windows may not expose the container network to the PC - if a scan cannot
+   reach it, tell me and I will adapt it.
 3. `docker compose -f lab/docker-compose.yml up -d`
-4. In the UI as ADMIN: engagement -> register target `juice-shop`, tick **Lab asset**, base URL `http://juice-shop:3000`
-   -> draft an authorization (WEB, API, TLS not needed) covering it -> submit -> approve -> **Request scan** WEB / PASSIVE.
+4. In the UI as ADMIN: engagement -> **Targets** card -> press **Fill in Juice Shop values**. They are:
+   Target `172.28.0.10`, Base URL `http://172.28.0.10:3000`, Label `OWASP Juice Shop (lab)`, **Lab asset** ticked.
+   Press **Register target** (it shows status LAB). `127.0.0.1` is refused on purpose: only the lab network is exempt.
+   -> draft an authorization (WEB, covering the target; TLS is not needed) -> submit -> approve (a second user, or set
+   `sentinelops.security.four-eyes=false` locally) -> **Request scan** WEB / PASSIVE.
 5. Expected: two runs (nuclei, zap) go QUEUED -> RUNNING -> COMPLETED and findings appear. It is quite likely that a flag or
    a parser needs a small fix on this first real run: send me the run error text and I will fix it.
 6. Check the findings: **Confirm** one, mark another **False positive**, move a confirmed one to **Fixed**,

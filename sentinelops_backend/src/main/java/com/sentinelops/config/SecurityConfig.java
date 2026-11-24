@@ -94,10 +94,14 @@ public class SecurityConfig {
                         "/api/engagements/*/schedules").hasAnyRole("TESTER", "MANAGER", "ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/schedules/*/enabled", "/api/engagements/*/targets/*/credential",
                         "/api/engagements/*/targets/*/openapi").hasAnyRole("TESTER", "MANAGER", "ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/schedules/*", "/api/engagements/*/targets/*/credential")
-                        .hasAnyRole("TESTER", "MANAGER", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/engagements/*/targets/*/credential", "/api/engagements/*/schedules")
-                        .hasAnyRole("TESTER", "MANAGER", "ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/schedules/*", "/api/engagements/*/targets/*/credential",
+                        "/api/engagements/*/targets/*/identities/*", "/api/engagements/*/targets/*/idor-probes/*",
+                        "/api/engagements/*/targets/*/upload-probes/*", "/api/engagements/*/targets/*/business-probes/*",
+                        "/api/engagements/*/targets/*/dependency-manifests/*").hasAnyRole("TESTER", "MANAGER", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/engagements/*/targets/*/credential", "/api/engagements/*/schedules",
+                        "/api/engagements/*/targets/*/identities", "/api/engagements/*/targets/*/idor-probes",
+                        "/api/engagements/*/targets/*/upload-probes", "/api/engagements/*/targets/*/business-probes",
+                        "/api/engagements/*/targets/*/dependency-manifests").hasAnyRole("TESTER", "MANAGER", "ADMIN")
                 .anyRequest().authenticated()
             )
             .headers(h -> h

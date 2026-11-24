@@ -102,6 +102,54 @@ export const api = {
     put(`/engagements/${id}/targets/${tid}/credential`, { headerName, value }),
   deleteCredential: (id: string, tid: string) => del(`/engagements/${id}/targets/${tid}/credential`),
   setOpenApi: (id: string, tid: string, url: string) => put(`/engagements/${id}/targets/${tid}/openapi`, { url }),
+
+  // Phase 0 of the logic-testing engine: test accounts on the target's own login (see PENTEST_COVERAGE_PLAN.md).
+  testIdentities: (id: string, tid: string) => request<any[]>(`/engagements/${id}/targets/${tid}/identities`),
+  createTestIdentity: (id: string, tid: string, p: any) => post(`/engagements/${id}/targets/${tid}/identities`, p),
+  deleteTestIdentity: (id: string, tid: string, identityId: string) =>
+    del(`/engagements/${id}/targets/${tid}/identities/${identityId}`),
+  testIdentityLogin: (id: string, tid: string, identityId: string) =>
+    post(`/engagements/${id}/targets/${tid}/identities/${identityId}/test-login`),
+  // Phase 1: AUTH-11 (JWT manipulation) and AUTH-12 (logout session reuse).
+  runAuthChecks: (id: string, tid: string, identityId: string) =>
+    post(`/engagements/${id}/targets/${tid}/identities/${identityId}/auth-checks`),
+
+  // Phase 2: ACC-01 / ACC-05 (IDOR, horizontal privilege escalation).
+  idorProbes: (id: string, tid: string) => request<any[]>(`/engagements/${id}/targets/${tid}/idor-probes`),
+  createIdorProbe: (id: string, tid: string, p: any) => post(`/engagements/${id}/targets/${tid}/idor-probes`, p),
+  deleteIdorProbe: (id: string, tid: string, probeId: string) =>
+    del(`/engagements/${id}/targets/${tid}/idor-probes/${probeId}`),
+  runIdorProbe: (id: string, tid: string, probeId: string) =>
+    post(`/engagements/${id}/targets/${tid}/idor-probes/${probeId}/run`),
+
+  // Phase 3: FILE-06 (extension / type bypass on file upload).
+  uploadProbes: (id: string, tid: string) => request<any[]>(`/engagements/${id}/targets/${tid}/upload-probes`),
+  createUploadProbe: (id: string, tid: string, p: any) => post(`/engagements/${id}/targets/${tid}/upload-probes`, p),
+  deleteUploadProbe: (id: string, tid: string, probeId: string) =>
+    del(`/engagements/${id}/targets/${tid}/upload-probes/${probeId}`),
+  runUploadProbe: (id: string, tid: string, probeId: string) =>
+    post(`/engagements/${id}/targets/${tid}/upload-probes/${probeId}/run`),
+
+  // Phase 4: checkout / business-logic probes (parameter tamper, reuse, race condition).
+  businessProbes: (id: string, tid: string) => request<any[]>(`/engagements/${id}/targets/${tid}/business-probes`),
+  createBusinessProbe: (id: string, tid: string, p: any) => post(`/engagements/${id}/targets/${tid}/business-probes`, p),
+  deleteBusinessProbe: (id: string, tid: string, probeId: string) =>
+    del(`/engagements/${id}/targets/${tid}/business-probes/${probeId}`),
+  runBusinessProbe: (id: string, tid: string, probeId: string) =>
+    post(`/engagements/${id}/targets/${tid}/business-probes/${probeId}/run`),
+
+  // Phase 5: NET-09 DNS hygiene (SPF/DMARC) and NET-07 default service credentials.
+  runDnsHygiene: (id: string, tid: string) => post(`/engagements/${id}/targets/${tid}/dns-hygiene-check`),
+  runDefaultCredsCheck: (id: string, tid: string, identityId: string) =>
+    post(`/engagements/${id}/targets/${tid}/identities/${identityId}/default-creds-check`),
+
+  // Phase 6: dependency / SCA scanning (npm audit against an uploaded package-lock.json).
+  dependencyManifests: (id: string, tid: string) => request<any[]>(`/engagements/${id}/targets/${tid}/dependency-manifests`),
+  createDependencyManifest: (id: string, tid: string, p: any) => post(`/engagements/${id}/targets/${tid}/dependency-manifests`, p),
+  deleteDependencyManifest: (id: string, tid: string, manifestId: string) =>
+    del(`/engagements/${id}/targets/${tid}/dependency-manifests/${manifestId}`),
+  runDependencyManifest: (id: string, tid: string, manifestId: string) =>
+    post(`/engagements/${id}/targets/${tid}/dependency-manifests/${manifestId}/run`),
   scans: (id: string) => request<any[]>(`/engagements/${id}/scans`),
   stopScan: (runId: string) => post(`/scans/${runId}/stop`),
 

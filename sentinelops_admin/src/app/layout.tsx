@@ -1,3 +1,4 @@
+import "./globals.css";
 import Nav from "@/components/Nav";
 
 export const metadata = {
@@ -5,13 +6,16 @@ export const metadata = {
   description: "Authorized penetration-testing engagement platform",
 };
 
+// Applies the saved theme before first paint so the page does not flash dark -> light.
+const themeInit = `try{var t=localStorage.getItem("so-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body style={{
-        fontFamily: "system-ui, sans-serif", margin: 0,
-        background: "#0f1115", color: "#e6e9ef",
-      }}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
+      <body>
         <Nav />
         {children}
       </body>

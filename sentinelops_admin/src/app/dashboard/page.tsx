@@ -17,9 +17,9 @@ export default function Dashboard() {
 
   if (!ready) return null;
   return (
-    <main style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 20px" }}>
-      <h1 style={{ fontSize: 22, margin: 0 }}>Dashboard</h1>
-      <p style={{ color: colors.muted, fontSize: 13 }}>
+    <main className="page">
+      <h1>Dashboard</h1>
+      <p className="page-sub">
         What is still open across your engagements. Scanner results count only after a tester has confirmed them
         (candidates are shown separately).
       </p>

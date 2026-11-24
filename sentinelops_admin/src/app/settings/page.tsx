@@ -19,17 +19,21 @@ export default function Settings() {
 
   if (!ready) return null;
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "26px 20px" }}>
+    <main className="page" style={{ maxWidth: 780 }}>
       <h1>Settings</h1>
+      <p className="page-sub">Global switches. Changes are recorded in the audit log.</p>
       <Card title="Active scanning (global switch)">
-        <p style={{ color: colors.muted, fontSize: 13, marginTop: 0 }}>
+        <p className="help">
           Active scanning sends intrusive test traffic. It runs only when <b>both</b> this switch is ON and the
           engagement&apos;s authorization explicitly allows it. Off by default; only an administrator can change it.
         </p>
-        <p>Current state: {active === null ? "…" : <Badge text={active ? "VERIFIED" : "REJECTED"} />} {active === null ? "" : active ? "ON" : "OFF"}</p>
+        <p style={{ margin: "0 0 14px" }}>
+          Current state:{" "}
+          {active === null ? "…" : <><Badge text={active ? "VERIFIED" : "REJECTED"} /> <b style={{ marginLeft: 6 }}>{active ? "ON" : "OFF"}</b></>}
+        </p>
         {role === "ADMIN"
           ? <Btn kind={active ? "danger" : "primary"} onClick={toggle}>{active ? "Turn OFF" : "Turn ON"}</Btn>
-          : <p style={{ color: colors.muted, fontSize: 13 }}>Only an administrator can change this.</p>}
+          : <p style={{ color: colors.muted, fontSize: 13, margin: 0 }}>Only an administrator can change this.</p>}
         <Msg err={err} />
       </Card>
     </main>

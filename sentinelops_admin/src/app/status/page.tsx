@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Health } from "@/lib/api";
+import { Badge, colors } from "@/components/ui";
 
 // Public status page: confirms the frontend can reach the backend and that the backend can reach its database.
 export default function StatusPage() {
@@ -15,28 +16,29 @@ export default function StatusPage() {
 
   const ok = health?.status === "UP" && health?.database === "UP";
   return (
-    <main style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px" }}>
-      <h1 style={{ letterSpacing: "-0.01em" }}>System status</h1>
-      <div style={{ padding: 16, borderRadius: 10, background: "#171a21", border: "1px solid #2a2f3a" }}>
-        {!health && !err && <p>Checking…</p>}
-        {err && <p style={{ color: "#f85149" }}>Backend unreachable: {err}</p>}
+    <main className="page" style={{ maxWidth: 600 }}>
+      <h1>System status</h1>
+      <p className="page-sub">Checks that this page can reach the backend and that the backend can reach its database.</p>
+      <div className="card">
+        {!health && !err && <p style={{ margin: 0 }}>Checking…</p>}
+        {err && <div className="msg err" role="alert" style={{ margin: 0 }}>Backend unreachable: {err}</div>}
         {health && (
           <>
-            <p style={{ color: ok ? "#3fb950" : "#f85149", fontWeight: 600 }}>
-              {ok ? "All systems operational" : "Degraded"}
+            <p style={{ color: ok ? colors.ok : colors.bad, fontWeight: 650, fontSize: 16, marginTop: 0 }}>
+              {ok ? "● All systems operational" : "● Degraded"}
             </p>
-            <table style={{ width: "100%", fontSize: 14 }}>
+            <table style={{ fontSize: 14 }}>
               <tbody>
-                <tr><td>Backend</td><td>{health.status}</td></tr>
-                <tr><td>Database</td><td>{health.database}</td></tr>
-                <tr><td>Service</td><td>{health.service} {health.version}</td></tr>
-                <tr><td>Server time</td><td>{health.time}</td></tr>
+                <tr><td style={{ color: colors.muted }}>Backend</td><td><Badge text={health.status === "UP" ? "VERIFIED" : "FAILED"} /> {health.status}</td></tr>
+                <tr><td style={{ color: colors.muted }}>Database</td><td><Badge text={health.database === "UP" ? "VERIFIED" : "FAILED"} /> {health.database}</td></tr>
+                <tr><td style={{ color: colors.muted }}>Service</td><td>{health.service} {health.version}</td></tr>
+                <tr><td style={{ color: colors.muted }}>Server time</td><td>{health.time}</td></tr>
               </tbody>
             </table>
           </>
         )}
       </div>
-      <p><Link href="/" style={{ color: "#5b8cff" }}>← Home</Link></p>
+      <p><Link href="/">← Home</Link></p>
     </main>
   );
 }
