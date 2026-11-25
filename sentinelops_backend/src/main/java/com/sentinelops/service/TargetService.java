@@ -32,9 +32,19 @@ public class TargetService {
     @Transactional
     public Target register(String engagementId, String value, String baseUrl, String label,
                            Technology technology, boolean lab, String actor) {
+        return register(engagementId, value, baseUrl, label, technology, lab, false, actor);
+    }
+
+    @PreAuthorize("hasAnyRole('TESTER','MANAGER','ADMIN')")
+    @Transactional
+    public Target register(String engagementId, String value, String baseUrl, String label,
+                           Technology technology, boolean lab, boolean sharedHostException, String actor) {
         Engagement engagement = access.requireEngagement(engagementId);
         if (lab && !CurrentUser.hasRole("ADMIN")) {
             throw new AccessDeniedException("Only an administrator can register a lab target.");
+        }
+        if (sharedHostException && !CurrentUser.hasRole("ADMIN")) {
+            throw new AccessDeniedException("Only an administrator can grant the shared-host exception.");
         }
 
         TargetParser.Parsed parsed = TargetParser.parse(value, lab);
@@ -47,6 +57,7 @@ public class TargetService {
 
         Target t = new Target(UUID.randomUUID().toString(), engagement.getId(), parsed.kind(), parsed.value(), actor);
         t.setLab(lab);
+        t.setSharedHostException(sharedHostException);
         t.setLabel(label);
         t.setTechnology(technology);
         if (baseUrl != null && !baseUrl.isBlank()) {
@@ -67,7 +78,8 @@ public class TargetService {
 
         targets.save(t);
         audit.record(actor, "target.registered", "Target", t.getId(),
-                "engagement=" + engagementId + " kind=" + t.getKind() + " value=" + t.getValue() + " lab=" + lab);
+                "engagement=" + engagementId + " kind=" + t.getKind() + " value=" + t.getValue() + " lab=" + lab
+                        + " sharedHostException=" + sharedHostException);
         return t;
     }
 

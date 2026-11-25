@@ -40,6 +40,15 @@ public class Target {
     @Column(nullable = false)
     private boolean lab = false;
 
+    /**
+     * Explicitly authorized even though it resolves to this server itself (e.g. another of our own apps
+     * sharing this box). Only ADMIN can set this. Ownership verification is still required as normal -
+     * this only lifts the "this is our own server" address check, never a generic private/loopback/
+     * link-local/metadata/reserved range.
+     */
+    @Column(name = "shared_host_exception", nullable = false)
+    private boolean sharedHostException = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", nullable = false, length = 16)
     private TargetStatus verificationStatus = TargetStatus.UNVERIFIED;
@@ -91,6 +100,8 @@ public class Target {
     public void setTechnology(Technology v) { this.technology = v; }
     public boolean isLab() { return lab; }
     public void setLab(boolean v) { this.lab = v; }
+    public boolean isSharedHostException() { return sharedHostException; }
+    public void setSharedHostException(boolean v) { this.sharedHostException = v; }
     public TargetStatus getVerificationStatus() { return verificationStatus; }
     public void setVerificationStatus(TargetStatus v) { this.verificationStatus = v; }
     public Instant getVerifiedAt() { return verifiedAt; }

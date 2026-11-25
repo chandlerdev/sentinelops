@@ -24,12 +24,48 @@ export function setSession(token: string | null, role?: string | null) {
   } catch { /* ignore */ }
 }
 
+/** Reads the "exp" claim out of the JWT payload without a library; returns null if it cannot be read. */
+function tokenExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = JSON.parse(json)?.exp;
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch { return null; }
+}
+
+function isExpired(token: string): boolean {
+  const exp = tokenExpiry(token);
+  return exp !== null && Date.now() >= exp;
+}
+
+/** Clears the session and sends the tab to the login page. Call this once a token is known to be stale. */
+function signOutExpired() {
+  setSession(null);
+  try {
+    if (!location.pathname.startsWith("/login")) {
+      sessionStorage.setItem("sentinelops_expired", "1");
+      location.href = "/login";
+    }
+  } catch { /* ignore */ }
+}
+
+const SESSION_EXPIRED_MSG = "Your session expired. Signing you out.";
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...(options.headers as any) };
   const token = getToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token) {
+    if (isExpired(token)) { signOutExpired(); throw new Error(SESSION_EXPIRED_MSG); }
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  if (token && (res.status === 401 || res.status === 403)) {
+    // A token that looked valid a moment ago but is now rejected has expired mid-session; sign out rather
+    // than show a confusing "not allowed" for what is really an expired login.
+    if (isExpired(getToken() || token)) { signOutExpired(); throw new Error(SESSION_EXPIRED_MSG); }
+  }
   const text = await res.text();
   let body: any = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
@@ -51,7 +87,12 @@ const del = (path: string) => request<any>(path, { method: "DELETE" });
 /** Downloads a PDF with the bearer token (a plain link cannot send it) and hands it to the browser. */
 async function downloadPdf(path: string, fallbackName: string) {
   const token = getToken();
+  if (token && isExpired(token)) { signOutExpired(); throw new Error(SESSION_EXPIRED_MSG); }
   const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (token && (res.status === 401 || res.status === 403) && isExpired(token)) {
+    signOutExpired();
+    throw new Error(SESSION_EXPIRED_MSG);
+  }
   if (!res.ok) {
     let msg = `Report failed (${res.status})`;
     try { msg = (await res.json()).error || msg; } catch { /* keep default */ }

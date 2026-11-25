@@ -20,8 +20,11 @@ import com.sentinelops.util.Cidr;
  *
  * Blocked by default: loopback, private (RFC 1918), CGNAT, link-local (incl. the 169.254.169.254 cloud
  * metadata address), multicast, reserved, IPv6 local ranges, every address of this server and the
- * addresses listed in configuration. The ONLY exception is the controlled lab: a target flagged "lab",
- * allowlisted by host, resolving inside the configured lab CIDRs, with the lab feature enabled.
+ * addresses listed in configuration. These are NEVER exempted, except for two admin-only, per-target
+ * flags: "lab" (our own Juice Shop, allowlisted by host, resolving inside the configured lab CIDRs, with
+ * the lab feature enabled) and "shared host exception" (another real site that happens to resolve to this
+ * server itself - e.g. shared hosting - explicitly authorized target by target; this never lifts a generic
+ * private/loopback/link-local/metadata/reserved range, only the "this is our own server" check).
  */
 @Component
 public class ScopeValidator {
@@ -53,11 +56,20 @@ public class ScopeValidator {
 
     /** Static policy: is this address in a never-scan range (before any lab exception)? */
     public boolean isBlockedAddress(InetAddress a) {
+        return isGenericBlocked(a) || isSelf(a);
+    }
+
+    /** RFC1918/loopback/link-local/metadata/reserved ranges - never exempted, not even for an allow-listed host. */
+    private boolean isGenericBlocked(InetAddress a) {
         for (Cidr c : BLOCKED) {
             if (c.contains(a)) return true;
         }
-        if (isConfiguredBlocked(a)) return true;
-        return isLocalInterface(a);
+        return false;
+    }
+
+    /** This server itself: a configured blocked address, or literally one of this box's own interfaces. */
+    private boolean isSelf(InetAddress a) {
+        return isConfiguredBlocked(a) || isLocalInterface(a);
     }
 
     private boolean isConfiguredBlocked(InetAddress a) {
@@ -106,13 +118,28 @@ public class ScopeValidator {
 
     /** Address-level verdict. {@code labTarget} enables the lab exception for blocked-but-lab addresses only. */
     public Check checkAddress(InetAddress a, boolean labTarget) {
+        return checkAddress(a, labTarget, false);
+    }
+
+    /**
+     * Address-level verdict. {@code labTarget} enables the lab exception for blocked-but-lab addresses only.
+     * {@code sharedHostAllowed} additionally exempts this server's own address (never a generic private/
+     * loopback/link-local/metadata/reserved range), for a hostname an operator explicitly allow-listed.
+     */
+    public Check checkAddress(InetAddress a, boolean labTarget, boolean sharedHostAllowed) {
         String text = a.getHostAddress();
-        if (!isBlockedAddress(a)) return Check.ok(List.of(text));
+        boolean generic = isGenericBlocked(a);
+        boolean self = isSelf(a);
+        if (!generic && !self) return Check.ok(List.of(text));
         if (labTarget && props.getScan().getLab().isEnabled() && inLabNetwork(a) && !isLocalInterface(a)) {
             return Check.ok(List.of(text));
         }
+        // The shared-host exception only ever lifts the "this server" check, never a generic private/
+        // loopback/link-local/metadata/reserved range.
+        if (sharedHostAllowed && self && !generic) return Check.ok(List.of(text));
         return Check.deny("Address " + text + " is in a blocked range (private, loopback, link-local, "
-                + "metadata, reserved or this server). Only the approved lab network is exempt.", List.of(text));
+                + "metadata, reserved or this server). Only the approved lab network or an explicitly "
+                + "allow-listed shared-host domain is exempt.", List.of(text));
     }
 
     /** Resolves (fresh DNS) and validates a target. Called at registration and again at every scan start. */
@@ -121,7 +148,7 @@ public class ScopeValidator {
             case DOMAIN:
                 return checkDomain(t);
             case IP:
-                return checkAddress(Cidr.parseLiteral(t.getValue()), t.isLab());
+                return checkAddress(Cidr.parseLiteral(t.getValue()), t.isLab(), t.isSharedHostException());
             case CIDR:
                 return checkCidr(t);
             default:
@@ -135,6 +162,7 @@ public class ScopeValidator {
             if (!props.getScan().getLab().isEnabled()) return Check.deny("Lab scanning is disabled on this server.", List.of());
             if (!isLabHost(host)) return Check.deny("Host '" + host + "' is not on the lab allowlist.", List.of());
         }
+        boolean sharedHostAllowed = t.isSharedHostException();
         List<InetAddress> addresses;
         try {
             addresses = resolver.resolve(host);
@@ -145,7 +173,7 @@ public class ScopeValidator {
 
         List<String> texts = addresses.stream().map(InetAddress::getHostAddress).collect(Collectors.toList());
         for (InetAddress a : addresses) {
-            Check c = checkAddress(a, t.isLab());
+            Check c = checkAddress(a, t.isLab(), sharedHostAllowed);
             if (!c.allowed()) return Check.deny("Host '" + host + "' resolves to a forbidden address. " + c.reason(), texts);
         }
         return Check.ok(texts);

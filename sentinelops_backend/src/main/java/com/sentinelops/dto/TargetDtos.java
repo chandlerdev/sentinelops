@@ -17,12 +17,13 @@ public final class TargetDtos {
             @Size(max = 512) String baseUrl,
             @Size(max = 255) String label,
             Technology technology,
-            boolean lab) {}
+            boolean lab,
+            boolean sharedHostException) {}
 
     /** "status" is the effective state: VERIFIED, EXPIRED (was verified, now lapsed), UNVERIFIED, or LAB. */
     public record TargetView(String id, String engagementId, TargetKind kind, String value, String baseUrl,
-                             String label, Technology technology, boolean lab, String status,
-                             Instant verifiedAt, Instant verificationExpiresAt, Instant createdAt,
+                             String label, Technology technology, boolean lab, boolean sharedHostException,
+                             String status, Instant verifiedAt, Instant verificationExpiresAt, Instant createdAt,
                              String openApiUrl) {
         public static TargetView from(Target t) {
             Instant now = Instant.now();
@@ -32,7 +33,7 @@ public final class TargetDtos {
             else if (t.getVerificationStatus() == TargetStatus.VERIFIED) status = "EXPIRED";
             else status = "UNVERIFIED";
             return new TargetView(t.getId(), t.getEngagementId(), t.getKind(), t.getValue(), t.getBaseUrl(),
-                    t.getLabel(), t.getTechnology(), t.isLab(), status, t.getVerifiedAt(),
+                    t.getLabel(), t.getTechnology(), t.isLab(), t.isSharedHostException(), status, t.getVerifiedAt(),
                     t.getVerificationExpiresAt(), t.getCreatedAt(), t.getOpenApiUrl());
         }
     }

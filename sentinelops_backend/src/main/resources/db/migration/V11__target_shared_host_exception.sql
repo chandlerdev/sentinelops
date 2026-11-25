@@ -1,0 +1,1 @@
+ALTER TABLE target ADD COLUMN shared_host_exception BOOLEAN NOT NULL DEFAULT FALSE;

@@ -84,6 +84,30 @@ class ScopeValidatorTest {
         assertFalse(validator.isBlockedAddress(ip("93.184.216.35")));
     }
 
+    private static Target domainWithSharedHostException(String host) {
+        Target t = domain(host, false);
+        t.setSharedHostException(true);
+        return t;
+    }
+
+    @Test
+    void sharedHostExceptionTargetMayResolveToThisServerButNotToAGenericPrivateRange() {
+        props.getScan().setBlockedAddresses(List.of("75.148.178.10"));
+
+        dns.put("teksupportsquad.desss-portfolio.com", List.of("75.148.178.10"));
+        assertTrue(validator.checkTarget(domainWithSharedHostException("teksupportsquad.desss-portfolio.com")).allowed(),
+                "a target an admin explicitly flagged may resolve to the server's own configured address");
+
+        // the same address is still refused for an otherwise-identical target without the flag
+        dns.put("other.example.com", List.of("75.148.178.10"));
+        assertFalse(validator.checkTarget(domain("other.example.com", false)).allowed());
+
+        // the flag never exempts a genuinely private/loopback/link-local/metadata/reserved range
+        dns.put("teksupportsquad.desss-portfolio.com", List.of("10.0.0.5"));
+        assertFalse(validator.checkTarget(domainWithSharedHostException("teksupportsquad.desss-portfolio.com")).allowed(),
+                "the shared-host exception must not open up generic private ranges");
+    }
+
     @Test
     void domainResolvingToPublicAddressIsAllowed() {
         dns.put("app.example.com", List.of("93.184.216.34"));

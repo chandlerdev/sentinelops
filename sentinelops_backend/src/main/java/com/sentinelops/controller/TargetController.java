@@ -43,7 +43,7 @@ public class TargetController {
     @PostMapping
     public ResponseEntity<TargetView> register(@PathVariable String engagementId, @Valid @RequestBody TargetRequest req) {
         var t = targets.register(engagementId, req.value(), req.baseUrl(), req.label(), req.technology(),
-                req.lab(), CurrentUser.email());
+                req.lab(), req.sharedHostException(), CurrentUser.email());
         return ResponseEntity.status(201).body(TargetView.from(t));
     }
 

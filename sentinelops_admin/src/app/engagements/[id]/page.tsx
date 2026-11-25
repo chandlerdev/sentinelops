@@ -16,7 +16,7 @@ type Section = "register" | "panel" | "auth" | "authForm" | "scan" | "runs" | "s
 type Note = { err?: string | null; ok?: string | null };
 
 // Values for our own practice target (OWASP Juice Shop in Docker, see lab/docker-compose.yml).
-const JUICE_SHOP = { value: "172.28.0.10", baseUrl: "http://172.28.0.10:3000", label: "OWASP Juice Shop (lab)", lab: true };
+const JUICE_SHOP = { value: "172.28.0.10", baseUrl: "http://172.28.0.10:3000", label: "OWASP Juice Shop (lab)", lab: true, sharedHostException: false };
 
 export default function EngagementDetail({ params }: { params: { id: string } }) {
   const id = params.id;
@@ -37,7 +37,7 @@ export default function EngagementDetail({ params }: { params: { id: string } })
   const n = (s: Section): Note => notes[s] || {};
 
   // target registration
-  const [tForm, setTForm] = useState({ value: "", baseUrl: "", label: "", lab: false });
+  const [tForm, setTForm] = useState({ value: "", baseUrl: "", label: "", lab: false, sharedHostException: false });
   const vT = useValidation();
   // per-target panel
   const [panel, setPanel] = useState<{ targetId: string; kind: "verify" | "manual" | "gate" | "creds" | "identities" | "idor" | "upload" | "business" | "deps" } | null>(null);
@@ -99,7 +99,7 @@ export default function EngagementDetail({ params }: { params: { id: string } })
     setNotes({});
     if (!vT.check({ value: { label: "Target", value: tForm.value } })) return;
     const r = await run("register", () => api.registerTarget(id, tForm), "Target registered. It is NOT yet verified or authorized.");
-    if (r) setTForm({ value: "", baseUrl: "", label: "", lab: false });
+    if (r) setTForm({ value: "", baseUrl: "", label: "", lab: false, sharedHostException: false });
   }
 
   async function startVerify(t: any, method: string) {
@@ -1172,6 +1172,13 @@ export default function EngagementDetail({ params }: { params: { id: string } })
               {role === "ADMIN" && (
                 <Field label="Lab asset" hint="Our own practice target only. Allows the private lab address.">
                   <input type="checkbox" checked={tForm.lab} onChange={(e) => setTForm({ ...tForm, lab: e.target.checked })} /> This is a lab asset
+                </Field>
+              )}
+              {role === "ADMIN" && (
+                <Field label="Shared-host exception"
+                       hint="Use ONLY when this real, authorized site happens to resolve to our own server (e.g. shared hosting). Ownership verification is still required; this does not allow any private/loopback/reserved address.">
+                  <input type="checkbox" checked={tForm.sharedHostException}
+                         onChange={(e) => setTForm({ ...tForm, sharedHostException: e.target.checked })} /> Allow this target even though it resolves to our server
                 </Field>
               )}
             </Grid>

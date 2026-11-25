@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, setSession } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Btn, Field, Msg, useValidation } from "@/components/ui";
@@ -12,6 +12,15 @@ export default function Login() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const v = useValidation();
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("sentinelops_expired")) {
+        sessionStorage.removeItem("sentinelops_expired");
+        setErr("Your session expired. Please sign in again.");
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
