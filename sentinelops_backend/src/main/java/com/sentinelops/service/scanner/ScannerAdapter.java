@@ -32,6 +32,9 @@ public interface ScannerAdapter {
     /** Environment variables for the container, taken from our own environment so they never reach a command line. */
     default java.util.Map<String, String> secretEnv(ScanContext ctx) { return java.util.Map.of(); }
 
+    /** Extra read-only mounts besides the work dir (e.g. nuclei's pre-downloaded templates folder). */
+    default List<DockerRunner.ExtraMount> extraMounts() { return List.of(); }
+
     String image(AppProperties.Engine engine);
 
     /** Arguments after the image name (including the program name for images without an entrypoint). */

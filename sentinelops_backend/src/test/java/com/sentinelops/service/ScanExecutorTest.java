@@ -116,7 +116,7 @@ class ScanExecutorTest {
 
         retests = mock(RetestRepository.class);
         credentials = mock(CredentialService.class);
-        executor = new ScanExecutor(gate, new ScannerRegistry(List.of(new NucleiAdapter(), new ZapAdapter(),
+        executor = new ScanExecutor(gate, new ScannerRegistry(List.of(new NucleiAdapter(new AppProperties()), new ZapAdapter(),
                 new ZapApiAdapter(), new TestsslAdapter(), new NmapAdapter())), new DockerRunner(fake, props),
                 scanRuns, findings, retests, credentials, audit,
                 props, settings, new TransactionTemplate(mock(PlatformTransactionManager.class)));

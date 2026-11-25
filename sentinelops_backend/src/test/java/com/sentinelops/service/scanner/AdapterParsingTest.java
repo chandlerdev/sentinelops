@@ -1,5 +1,6 @@
 package com.sentinelops.service.scanner;
 
+import com.sentinelops.config.AppProperties;
 import com.sentinelops.entity.ScanMode;
 import com.sentinelops.entity.Severity;
 import com.sentinelops.entity.TargetKind;
@@ -34,7 +35,7 @@ class AdapterParsingTest {
                 "this is not json",
                 "{\"template-id\":\"tech-detect\",\"info\":{\"name\":\"Wappalyzer\",\"severity\":\"info\"},\"host\":\"app.example.com\"}",
                 ""));
-        var out = new NucleiAdapter().parse(dir, ctx(TargetKind.DOMAIN, "app.example.com"));
+        var out = new NucleiAdapter(new AppProperties()).parse(dir, ctx(TargetKind.DOMAIN, "app.example.com"));
 
         assertEquals(2, out.size());
         assertEquals(Severity.MEDIUM, out.get(0).severity());
@@ -47,7 +48,7 @@ class AdapterParsingTest {
 
     @Test
     void nucleiWithNoOutputFileMeansNothingFound(@TempDir Path dir) throws IOException {
-        assertTrue(new NucleiAdapter().parse(dir, ctx(TargetKind.DOMAIN, "app.example.com")).isEmpty());
+        assertTrue(new NucleiAdapter(new AppProperties()).parse(dir, ctx(TargetKind.DOMAIN, "app.example.com")).isEmpty());
     }
 
     @Test

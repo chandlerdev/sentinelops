@@ -29,12 +29,20 @@ public class DockerRunner {
     private static final Pattern ENV_NAME = Pattern.compile("^[A-Z][A-Z0-9_]{0,40}$");
     private static final Pattern HOST =Pattern.compile("^[a-z0-9][a-z0-9.-]{0,252}$");
 
+    /** A second, read-only bind mount besides the work dir (e.g. pre-downloaded nuclei templates). */
+    public record ExtraMount(String hostPath, String containerPath) {}
+
     public record RunSpec(String containerName, String image, String network, String host, List<String> pinnedIpv4,
                           Path hostOutDir, String containerOutDir, List<String> command, Duration timeout,
-                          Map<String, String> env) {
+                          Map<String, String> env, List<ExtraMount> extraMounts) {
         public RunSpec(String containerName, String image, String network, String host, List<String> pinnedIpv4,
                        Path hostOutDir, String containerOutDir, List<String> command, Duration timeout) {
-            this(containerName, image, network, host, pinnedIpv4, hostOutDir, containerOutDir, command, timeout, Map.of());
+            this(containerName, image, network, host, pinnedIpv4, hostOutDir, containerOutDir, command, timeout, Map.of(), List.of());
+        }
+        public RunSpec(String containerName, String image, String network, String host, List<String> pinnedIpv4,
+                       Path hostOutDir, String containerOutDir, List<String> command, Duration timeout,
+                       Map<String, String> env) {
+            this(containerName, image, network, host, pinnedIpv4, hostOutDir, containerOutDir, command, timeout, env, List.of());
         }
     }
 
@@ -86,6 +94,16 @@ public class DockerRunner {
         }
         argv.add("--mount");
         argv.add("type=bind,source=" + s.hostOutDir().toAbsolutePath() + ",target=" + s.containerOutDir());
+        if (s.extraMounts() != null) {
+            for (ExtraMount m : s.extraMounts()) {
+                require(m.hostPath() != null && !m.hostPath().isBlank()
+                        && !m.hostPath().contains(",") && !m.hostPath().contains("\n"), "extra mount source");
+                require(m.containerPath() != null && m.containerPath().startsWith("/") && !m.containerPath().contains(","),
+                        "extra mount target");
+                argv.add("--mount");
+                argv.add("type=bind,source=" + Path.of(m.hostPath()).toAbsolutePath() + ",target=" + m.containerPath() + ",readonly");
+            }
+        }
         argv.add(s.image());
         for (String a : s.command()) {
             require(a != null && a.indexOf('\0') < 0 && a.indexOf('\n') < 0 && a.indexOf('\r') < 0, "argument");

@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -112,6 +113,33 @@ class ScanContextAndRunnerTest {
     }
 
     @Test
+    void anExtraMountIsAddedReadOnlyAlongsideTheWorkDir() {
+        var r = runner();
+        var withTemplates = new DockerRunner.RunSpec(DockerRunner.containerName("nuclei", RUN),
+                "projectdiscovery/nuclei:latest", "", "app.example.com", List.of(), Path.of("scan-work", RUN), "/out",
+                List.of("-u", "https://app.example.com"), Duration.ofMinutes(5), Map.of(),
+                List.of(new DockerRunner.ExtraMount("nuclei-templates", "/templates")));
+        List<String> argv = r.buildCommand(withTemplates);
+
+        long mountCount = argv.stream().filter(a -> a.equals("--mount")).count();
+        assertEquals(2, mountCount, "the work dir mount, plus the extra one");
+        int first = argv.indexOf("--mount");
+        int second = argv.subList(first + 1, argv.size()).indexOf("--mount") + first + 1;
+        String extra = argv.get(second + 1);
+        assertTrue(extra.contains("target=/templates"));
+        assertTrue(extra.endsWith(",readonly"));
+    }
+
+    @Test
+    void anExtraMountWithAnUnsafeTargetIsRefused() {
+        var r = runner();
+        var bad = new DockerRunner.RunSpec(DockerRunner.containerName("nuclei", RUN), "projectdiscovery/nuclei:latest",
+                "", "app.example.com", List.of(), Path.of("scan-work", RUN), "/out", List.of(), Duration.ofMinutes(5),
+                Map.of(), List.of(new DockerRunner.ExtraMount("x", "not-absolute")));
+        assertThrows(IllegalArgumentException.class, () -> r.buildCommand(bad));
+    }
+
+    @Test
     void noNetworkOrPinsWhenNotGiven() {
         List<String> argv = runner().buildCommand(spec("", List.of(), List.of("-u", "https://a.com")));
         assertFalse(argv.contains("--network"));
@@ -158,14 +186,30 @@ class ScanContextAndRunnerTest {
 
     @Test
     void passiveNucleiHasNoCveTemplatesAndAlwaysMarksTraffic() {
-        var passive = new NucleiAdapter().command(ctx(TargetKind.DOMAIN, "app.example.com", null));
+        var passive = new NucleiAdapter(new AppProperties()).command(ctx(TargetKind.DOMAIN, "app.example.com", null));
         assertFalse(passive.get(passive.indexOf("-tags") + 1).contains("cve"));
         assertTrue(passive.contains("X-Pentest: sentinelops/e1"));
         assertTrue(passive.get(passive.indexOf("-exclude-tags") + 1).contains("intrusive"));
 
-        var active = new NucleiAdapter().command(ScanContext.of(RUN, TargetKind.DOMAIN, "app.example.com", null, false,
+        var active = new NucleiAdapter(new AppProperties()).command(ScanContext.of(RUN, TargetKind.DOMAIN, "app.example.com", null, false,
                 ScanMode.ACTIVE, List.of("93.184.216.34"), "X-Pentest", "sentinelops/e1"));
         assertTrue(active.get(active.indexOf("-tags") + 1).contains("cve"));
+    }
+
+    @Test
+    void nucleiUsesPreDownloadedTemplatesOnlyWhenConfigured() {
+        var withoutTemplates = new NucleiAdapter(new AppProperties());
+        assertFalse(withoutTemplates.command(ctx(TargetKind.DOMAIN, "app.example.com", null)).contains("-t"));
+        assertTrue(withoutTemplates.extraMounts().isEmpty());
+
+        var props = new AppProperties();
+        props.getScan().getEngine().setNucleiTemplatesDir("/srv/nuclei-templates");
+        var withTemplates = new NucleiAdapter(props);
+        var cmd = withTemplates.command(ctx(TargetKind.DOMAIN, "app.example.com", null));
+        assertEquals("/templates", cmd.get(cmd.indexOf("-t") + 1));
+        assertEquals(1, withTemplates.extraMounts().size());
+        assertEquals("/srv/nuclei-templates", withTemplates.extraMounts().get(0).hostPath());
+        assertEquals("/templates", withTemplates.extraMounts().get(0).containerPath());
     }
 
     @Test

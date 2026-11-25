@@ -138,7 +138,7 @@ public class ScanExecutor {
                 adapter.image(eng),
                 target.isLab() ? eng.getLabNetwork() : eng.getScanNetwork(),
                 ctx.host(), pins, outDir, adapter.containerOutDir(), adapter.command(ctx),
-                Duration.ofMinutes(eng.getTimeoutMinutes()), adapter.secretEnv(ctx));
+                Duration.ofMinutes(eng.getTimeoutMinutes()), adapter.secretEnv(ctx), adapter.extraMounts());
 
         audit.record("worker", "scan.started", "ScanRun", run.getId(),
                 "tool=" + adapter.id() + " mode=" + mode + " target=" + target.getValue() + " lab=" + target.isLab()

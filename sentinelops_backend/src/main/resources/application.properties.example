@@ -86,6 +86,13 @@ sentinelops.scan.engine.zap-image=ghcr.io/zaproxy/zaproxy:stable
 sentinelops.scan.engine.testssl-image=drwetter/testssl.sh:3.2
 sentinelops.scan.engine.nmap-image=instrumentisto/nmap:latest
 
+# nuclei needs its vulnerability template files. The lab network has no internet access, so nuclei cannot
+# download them itself there - pre-download them ONCE into a host folder (with normal internet access) and
+# point this at it. Leave empty to use nuclei's own default behaviour (only works where there IS internet).
+#   docker run --rm -v /var/www/.../sentinelops_backend/nuclei-templates:/root/nuclei-templates \
+#     projectdiscovery/nuclei:latest -update-templates
+sentinelops.scan.engine.nuclei-templates-dir=
+
 # ---- Dependency scanning (Phase 6 of the logic-testing engine) ----
 # Runs on the SERVER itself (not Docker, not against any target's network) against an uploaded
 # package-lock.json. Needs npm installed on the server; leave the default if "npm" is on PATH.

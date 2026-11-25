@@ -111,6 +111,14 @@ public class AppProperties {
         /** "npm" binary on the SERVER (not Docker): runs "npm audit" against an uploaded package-lock.json. */
         private String npmBinary = "npm";
         private int npmAuditTimeoutSeconds = 60;
+        /**
+         * Host folder with pre-downloaded nuclei templates (run "nuclei -update-templates" into it once, with
+         * normal internet access). Mounted read-only into every nuclei container. Required for LAB targets,
+         * since the lab network has no internet access and nuclei cannot download templates there itself.
+         * Empty = not configured; nuclei falls back to its own default behaviour (fine for non-lab targets
+         * on a network with internet access, but lab scans will fail with "no templates provided for scan").
+         */
+        private String nucleiTemplatesDir = "";
 
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean v) { this.enabled = v; }
@@ -144,6 +152,8 @@ public class AppProperties {
         public void setNpmBinary(String v) { this.npmBinary = v; }
         public int getNpmAuditTimeoutSeconds() { return npmAuditTimeoutSeconds; }
         public void setNpmAuditTimeoutSeconds(int v) { this.npmAuditTimeoutSeconds = Math.max(5, v); }
+        public String getNucleiTemplatesDir() { return nucleiTemplatesDir; }
+        public void setNucleiTemplatesDir(String v) { this.nucleiTemplatesDir = v == null ? "" : v; }
     }
 
     public static class Verification {

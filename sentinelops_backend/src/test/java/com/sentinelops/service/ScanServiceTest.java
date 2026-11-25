@@ -41,7 +41,7 @@ class ScanServiceTest {
             return i.getArgument(0);
         });
 
-        service = new ScanService(gate, new ScannerRegistry(List.of(new NucleiAdapter(), new ZapAdapter(),
+        service = new ScanService(gate, new ScannerRegistry(List.of(new NucleiAdapter(new AppProperties()), new ZapAdapter(),
                 new TestsslAdapter(), new NmapAdapter())), scanRuns, mock(AuditService.class), props, settings,
                 mock(AccessService.class), docker);
 

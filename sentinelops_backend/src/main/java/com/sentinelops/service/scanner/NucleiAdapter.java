@@ -19,6 +19,13 @@ import java.util.List;
 public class NucleiAdapter implements ScannerAdapter {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final String TEMPLATES_DIR = "/templates";
+
+    private final AppProperties props;
+
+    public NucleiAdapter(AppProperties props) {
+        this.props = props;
+    }
 
     @Override public String id() { return "nuclei"; }
 
@@ -37,6 +44,14 @@ public class NucleiAdapter implements ScannerAdapter {
                 : java.util.Map.of();
     }
 
+    /** Pre-downloaded templates, mounted read-only (see sentinelops.scan.engine.nuclei-templates-dir). Required
+     *  for lab targets: the lab network has no internet access, so nuclei cannot fetch templates itself there. */
+    @Override
+    public List<DockerRunner.ExtraMount> extraMounts() {
+        String dir = props.getScan().getEngine().getNucleiTemplatesDir();
+        return dir.isBlank() ? List.of() : List.of(new DockerRunner.ExtraMount(dir, TEMPLATES_DIR));
+    }
+
     @Override
     public List<String> command(ScanContext ctx) {
         List<String> c = new ArrayList<>(List.of(
@@ -46,6 +61,10 @@ public class NucleiAdapter implements ScannerAdapter {
                 "-H", ctx.headerLine(),
                 "-rate-limit", "20", "-concurrency", "10", "-timeout", "10", "-retries", "1",
                 "-exclude-tags", "dos,fuzz,intrusive,bruteforce"));
+        if (!props.getScan().getEngine().getNucleiTemplatesDir().isBlank()) {
+            c.add("-t");
+            c.add(TEMPLATES_DIR);
+        }
         if (ctx.authenticated()) {
             // The credential is read from a file so it is not visible in the process list. (-H accepts a file path.)
             c.add("-H");
