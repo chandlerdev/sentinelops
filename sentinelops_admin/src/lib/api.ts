@@ -3,6 +3,9 @@
 // NOTE: the role kept here only drives which buttons are shown. The backend enforces every permission.
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8280/api";
+// Matches next.config.js's basePath, so a raw location.href redirect lands on the right path
+// (router.push() handles this on its own; a hard redirect from plain code does not).
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "/sentinelops";
 
 export type Role = "ADMIN" | "MANAGER" | "TESTER" | "CLIENT";
 
@@ -43,9 +46,10 @@ function isExpired(token: string): boolean {
 function signOutExpired() {
   setSession(null);
   try {
-    if (!location.pathname.startsWith("/login")) {
+    const loginPath = `${BASE_PATH}/login`;
+    if (!location.pathname.startsWith(loginPath)) {
       sessionStorage.setItem("sentinelops_expired", "1");
-      location.href = "/login";
+      location.href = loginPath;
     }
   } catch { /* ignore */ }
 }
